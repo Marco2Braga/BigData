@@ -1,0 +1,232 @@
+import pandas as pd
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeClassifier, plot_tree
+from sklearn.metrics import accuracy_score
+from sklearn.svm import LinearSVC, SVC
+from sklearn.pipeline import Pipeline
+import matplotlib.pyplot as plt
+
+# Leitura do arquivo com separador correto
+df = pd.read_csv('vendas_riotuor_2023.csv', sep=';')
+df = df.dropna()
+
+# Correção de colunas se necessário
+produto_corrigido = {
+    'City Tour Completo': 'city tour completo',
+    'Tour Arraial do Cabo': 'tour arraial do cabo',
+    'Passeio Cristo Redentor': 'passeio cristo redentor',
+    'Passeio Pão de Açúcar': 'passeio pao de acucar',
+    'Translado Aeroporto Santos Dumont': 'translado aeroporto santos dumont',
+    'Translado Aeroporto Galeão': 'translado aeroporto galeao',
+    'Aluguel Van Corporativa': 'aluguel van corporativa',
+    'Tour Búzios': 'tour buzios',
+    'Tour Petrópolis': 'tour petropolis'
+}
+df['Produto'] = df['Produto'].replace(produto_corrigido)
+
+# Conversão de tipos
+numericas = ['Distancia_KM', 'Preco_Unitario', 'Quantidade_Vendida', 'Custo_Operacional', 'Receita_Total']
+for col in numericas:
+    df[col] = pd.to_numeric(df[col], errors='coerce')
+
+# Criar coluna: Lucro = Receita - Custo
+df['Lucro'] = df['Receita_Total'] - df['Custo_Operacional']
+
+# Codificação de variáveis categóricas
+le_produto = LabelEncoder()
+df['Produto_encoded'] = le_produto.fit_transform(df['Produto'])
+
+le_veiculo = LabelEncoder()
+df['Tipo_Veiculo_encoded'] = le_veiculo.fit_transform(df['Tipo_Veiculo'])
+
+le_promocao = LabelEncoder()
+df['Promocao_encoded'] = le_promocao.fit_transform(df['Promocao'])
+
+# Separação de features e target
+X = df[['Preco_Unitario', 'Distancia_KM', 'Custo_Operacional', 'Produto_encoded', 'Tipo_Veiculo_encoded', 'Quantidade_Vendida']]
+y = df['Promocao_encoded']
+
+# Divisão treino e teste
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+
+# Padronização
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+# Modelos
+modelo_svm = SVC(kernel='linear', C=0.1, max_iter=10000)
+modelo_svm.fit(X_train_scaled, y_train)
+y_pred_svm = modelo_svm.predict(X_test_scaled)
+acuracia_svm = accuracy_score(y_test, y_pred_svm)
+
+modelo_arvore = DecisionTreeClassifier(random_state=42, max_depth=5, min_samples_split=10)
+modelo_arvore.fit(X_train, y_train)
+y_pred_arvore = modelo_arvore.predict(X_test)
+acuracia_arvore = accuracy_score(y_test, y_pred_arvore)
+
+pipeline_svm = Pipeline([
+    ('scaler', StandardScaler()),
+    ('svm', LinearSVC(max_iter=10000, random_state=42))
+])
+pipeline_svm.fit(X_train, y_train)
+y_pred_pipeline = pipeline_svm.predict(X_test)
+acuracia_pipeline = accuracy_score(y_test, y_pred_pipeline)
+
+# Dicionários para tornar o menu mais intuitivo
+dicionario_produto = dict(zip(range(len(le_produto.classes_)), le_produto.classes_))
+dicionario_veiculo = dict(zip(range(len(le_veiculo.classes_)), le_veiculo.classes_))
+
+# Menu interativo
+while True:
+    print('######################################################################')
+    print('#-------------  Software para Classificação de Produtos  ------------#')
+    print('#                                                                    #')
+    print('#                    1 - Árvore de Decisão                           #')
+    print('#                    2 - SVM                                         #')
+    print('#                    3 - SVM Pipeline                                #')
+    print('#                    4 - Encerrar                                    #')
+    print('######################################################################\n')
+
+    opcao = input("\nDigite sua opção: ")
+
+    if opcao == '1':
+        while True:
+            print('######################################################################')
+            print('#-------------------------- Árvore de Decisão -----------------------#')
+            print('#                                                                    #')
+            print('#    1 - Mostrar desempenho                                          #')
+            print('#    2 - Mostrar árvore de decisão                                   #')
+            print('#    3 - Fazer nova classificação                                    #')
+            print('#    4 - Voltar ao menu principal                                    #')
+            print('######################################################################\n')
+
+            opcao_arv = input("\nDigite sua opção: ")
+
+            # Mantém o mesmo código dentro deste bloco
+
+            if opcao_arv == '1':
+                print(f"\n  -------->  Acurácia - Árvore de Decisão: {acuracia_arvore:.2f}\n")
+            elif opcao_arv == '2':
+                plt.figure(figsize=(12, 6))
+                plot_tree(modelo_arvore, filled=True, feature_names=X.columns, class_names=le_promocao.classes_)
+                plt.title("Árvore de Decisão - Promoção")
+                plt.show()
+            elif opcao_arv == '3':
+                print("\nDigite os dados para classificação:")
+                def formatar_dicionario(dicionario, titulo="Dicionário"):
+                  resultado = f"{titulo}:\n"
+                  for k, v in dicionario.items():
+                      resultado += f"{k}: {v}\n"
+                  return resultado
+
+                print(formatar_dicionario(dicionario_produto, "Produtos"))
+                print(formatar_dicionario(dicionario_veiculo, "Tipo Veículo"))
+
+                prod = int(input("\nProduto codificado: "))
+                pu = float(input("\nPreço Unitário: "))
+                dist = float(input("\nDistância (km): "))
+                custo = float(input("\nCusto Operacional: "))
+                veic = int(input("\nTipo de Veículo codificado: "))
+                qntd = int(input("\nQuantidade vendida: "))
+
+                novo = pd.DataFrame([[pu, dist, custo, prod, veic, qntd]], columns=X.columns)
+                pred = modelo_arvore.predict(novo)
+
+                print(f"\n  -------->  Promoção prevista: {le_promocao.inverse_transform(pred)[0]}\n")
+            elif opcao_arv == '4':
+                break
+            else:
+                print("Opção inválida. Tente novamente.")
+
+    elif opcao == '2':
+        while True:
+            print('######################################################################')
+            print('#---------------------------------- SVM -----------------------------#')
+            print('#                                                                    #')
+            print('#    1 - Mostrar desempenho                                          #')
+            print('#    2 - Fazer nova classificação                                    #')
+            print('#    3 - Voltar ao menu principal                                    #')
+            print('######################################################################\n')
+
+            opcao_svm = input("\nDigite sua opção: ")
+
+            if opcao_svm == '1':
+                print(f"\n  -------->  Acurácia - SVM: {acuracia_svm:.2f}\n")
+            elif opcao_svm == '2':
+                print("\nDigite os dados para classificação:")
+                def formatar_dicionario(dicionario, titulo="Dicionário"):
+                  resultado = f"{titulo}:\n"
+                  for k, v in dicionario.items():
+                      resultado += f"{k}: {v}\n"
+                  return resultado
+
+                print(formatar_dicionario(dicionario_produto, "Produtos"))
+                print(formatar_dicionario(dicionario_veiculo, "Tipo Veículo"))
+
+                prod = int(input("\nProduto codificado: "))
+                pu = float(input("\nPreço Unitário: "))
+                dist = float(input("\nDistância (km): "))
+                custo = float(input("\nCusto Operacional: "))
+                veic = int(input("\nTipo de Veículo codificado: "))
+                qntd = int(input("\nQuantidade vendida: "))
+
+                novo = pd.DataFrame([[pu, dist, custo, prod, veic, qntd]], columns=X.columns)
+                novo_scaled = scaler.transform(novo)
+                pred = modelo_svm.predict(novo_scaled)
+
+                print(f"\n  -------->  Promoção prevista: {le_promocao.inverse_transform(pred)[0]}\n")
+            elif opcao_svm == '3':
+                break
+            else:
+                print("Opção inválida. Tente novamente.")
+
+    elif opcao == '3':
+        while True:
+            print('######################################################################')
+            print('#---------------------------- SVM Pipeline --------------------------#')
+            print('#                                                                    #')
+            print('#    1 - Mostrar desempenho                                          #')
+            print('#    2 - Fazer nova classificação                                    #')
+            print('#    3 - Voltar ao menu principal                                    #')
+            print('######################################################################\n')
+
+            opcao_pipe = input("\nDigite sua opção: ")
+
+            if opcao_pipe == '1':
+                print(f"\n  -------->  Acurácia - Pipeline SVM: {acuracia_pipeline:.2f}\n")
+            elif opcao_pipe == '2':
+                print("\nDigite os dados para classificação:")
+                def formatar_dicionario(dicionario, titulo="Dicionário"):
+                  resultado = f"{titulo}:\n"
+                  for k, v in dicionario.items():
+                      resultado += f"{k}: {v}\n"
+                  return resultado
+
+                print(formatar_dicionario(dicionario_produto, "Produtos"))
+                print(formatar_dicionario(dicionario_veiculo, "Tipo Veículo"))
+
+                prod = int(input("\nProduto codificado: "))
+                pu = float(input("\nPreço Unitário: "))
+                dist = float(input("\nDistância (km): "))
+                custo = float(input("\nCusto Operacional: "))
+                veic = int(input("\nTipo de Veículo codificado: "))
+                qntd = int(input("\nQuantidade vendida: "))
+
+                novo = pd.DataFrame([[pu, dist, custo, prod, veic, qntd]], columns=X.columns)
+                pred = pipeline_svm.predict(novo)
+
+                print(f"\n  -------->  Promoção prevista: {le_promocao.inverse_transform(pred)[0]}\n")
+            elif opcao_pipe == '3':
+                break
+            else:
+                print("\nOpção inválida. Tente novamente.")
+
+    elif opcao == '4':
+        print('######################################################################')
+        print('#---------------------- Programa finalizado -------------------------#')
+        print('######################################################################')
+        break
+    else:
+        print("Opção inválida. Tente novamente.")
